@@ -1,2 +1,196 @@
-# SPGC-Cora-Reproduction
-Experiment reproduction part of the CSI5137: Advanced Topics in Database and Database Management at the University of Ottawa
+# SPGC – Cora Reproduction (Inference Speed-Up Evaluation)
+
+This repository contains the reproduction of the inference speed-up experiment for the **Cora** dataset using **SPGC (Spectral Propagation-based Graph Compression)** from the paper:
+
+> **Fan et al., “Inference-Friendly Graph Compression for Graph Neural Networks,” PVLDB 2025**  
+> https://www.vldb.org/pvldb/vol18/p3203-fan.pdf
+
+The objective of this project is to execute the SPGC pipeline on the Cora dataset and compare the inference time of **GCN**, **GAT**, and **GraphSAGE** before and after graph compression. This README includes complete instructions for running the notebook in Google Colab and documents all fixes required to adapt the original SPGC code for successful execution.
+
+---
+
+## 📌 Repository Contents
+
+| File / Folder | Description |
+|--------------|-------------|
+| `Cora.ipynb` | Modified SPGC notebook adapted for Google Colab |
+| `cora.content`, `cora.cites` | Cora dataset files required by the notebook |
+| `results/` | Generated plots and timing output after execution |
+| `README.md` | Project documentation |
+
+---
+
+## 📊 Inference Speed-Up Results (Cora Dataset)
+
+| GNN Model   | Original Time (s) | SPGC Time (s) | Speed-Up (×) |
+|------------:|------------------:|--------------:|-------------:|
+| **GCN**     | 0.029737          | 0.012566      | **2.37×**    |
+| **GAT**     | 0.270872          | 0.102098      | **2.65×**    |
+| **GraphSAGE** | 0.061742        | 0.022284      | **2.77×**    |
+
+> Speed-Up is computed as: **Original Time ÷ SPGC Time**.  
+> Higher values indicate stronger inference efficiency improvements after graph compression.
+
+These results demonstrate that SPGC consistently accelerates inference across all tested architectures without modifying model weights or retraining.
+
+---
+
+## ⚙️ Environment Requirements
+
+The experiment runs in **Google Colab**.  
+Required libraries:
+
+| Library | Version |
+|--------|---------|
+| Python | ≥ 3.11 |
+| NumPy | ≥ 2.3.4 |
+| Pandas | ≥ 2.3.2 |
+| PyTorch | ≥ 2.9.0 |
+| PyTorch Geometric | ≥ 2.6.1 |
+| BisPy | ≥ 0.2.2 |
+
+No GPU configuration is necessary — CPU runtime is sufficient.
+
+---
+
+## 🚀 How to Run the Experiment in Google Colab
+
+### 1️⃣ Download the Cora dataset
+Download and upload the following to Google Drive:  
+https://graphsandnetworks.com/the-cora-dataset/
+- cora.content
+- cora.cites
+
+### 2️⃣ Open Google Colab
+Go to https://colab.research.google.com/ and upload: Cora.ipynb
+
+### 3️⃣ Run the notebook
+- Click **Runtime → Run all**
+- Grant Google Drive access when prompted
+
+### 🔧 Fixing common dataset path errors
+If Colab shows `cora.content not found`:
+1. Open the left Files panel
+2. Locate `cora.content` in your Drive
+3. Click **⋮ → Copy path**
+4. Replace both path strings in the failing cell  
+(do the same for `cora.cites`)
+
+---
+
+## 🔧 Code Fixes Applied to the Original SPGC Notebook
+
+The original SPGC notebook was not directly runnable in Colab. The following fixes were applied:
+
+### ✔ 1. Remove unused Arxiv loading
+```python
+# loaded_tensor = torch.load('ARXIV_SPAR.pt')
+# data.edge_index = loaded_tensor.edge_index
+```
+
+### ✔ 2. Define a valid save path for 20%_cora_train_mask.pt
+```python 
+file_path = "gdrive/My Drive/GNN_Sparsification/20%_cora_train_mask.pt"
+train_mask = torch.load("gdrive/My Drive/GNN_Sparsification/20%_cora_train_mask.pt")
+```
+
+### ✔ 3. Remove unused FGC block
+```python 
+# cora_FGC = torch.load('gdrive/My Drive/GNN_Sparsification/Coarsened_CORA.pt')
+# cora_FGC
+# edge_indices
+# cora_FGC.edge_index = edge_indices
+# cora_FGC
+# torch.save(cora_FGC,'gdrive/My Drive/GNN_Sparsification/cora_FGC.pt')
+```
+
+### ✔ 4. Replace incorrect usage of data with cora
+```python 
+- new_x = torch.zeros(num_nodes, data.x.shape[1])
++ new_x = torch.zeros(num_nodes, cora.x.shape[1])
+
+- new_x[i,:] = torch.mean(data.x[list(list_of_tuples[i]),:], axis = 0)
++ new_x[i,:] = torch.mean(cora.x[list(list_of_tuples[i]),:], axis = 0)
+
+- L.append(int(data.y[ele].numpy()))
++ L.append(int(cora.y[ele].numpy()))
+
+- new_x = torch.zeros(len(list(G.nodes)), data.x.shape[1])
++ new_x = torch.zeros(len(list(G.nodes)), cora.x.shape[1])
+
+- new_x[i,:] = data.x[list_itr[i],:]
++ new_x[i,:] = cora.x[list_itr[i],:]
+
+- new_y[i] = int(data.y[list_itr[i]])
++ new_y[i] = int(cora.y[list_itr[i]])
+```
+
+### Update save path:
+```python
+torch.save(data_new1, 'gdrive/My Drive/GNN_Sparsification/20%_Induced_cora.pt')
+```
+
+### ✔ 5. Fix classifier output size (Cora has 7 classes)
+```python 
+- self.conv2 = GCNConv(128, 40)
++ self.conv2 = GCNConv(128, 7)
+
+- self.conv2 = GATConv(128, 40)
++ self.conv2 = GATConv(128, 7)
+
+- self.conv2 = SAGEConv(128, 40)
++ self.conv2 = SAGEConv(128, 7)
+```
+
+### ✔ 6. Correct inference calls for GCN / GAT / GraphSAGE
+```python 
+- out = model(data.x, data.edge_index)
++ out = model(cora.x, cora.edge_index)
+
+- loss = torch.nn.functional.nll_loss(out, data.y)
++ loss = torch.nn.functional.nll_loss(out, cora.y)
+
+- correct = compute_accuracy(out.argmax(dim=1), data.y)
++ correct = compute_accuracy(out.argmax(dim=1), cora.y)
+```
+
+### Masked Inference Updates:
+```python 
+- loss = torch.nn.functional.nll_loss(out[~test_mask], data.y[~test_mask])
++ loss = torch.nn.functional.nll_loss(out[~test_mask], cora.y[~test_mask])
+
+- correct = compute_accuracy(out[~test_mask].argmax(dim=1), data.y[~test_mask])
++ correct = compute_accuracy(out[~test_mask].argmax(dim=1), cora.y[~test_mask])
+```
+
+## 📈 Output
+
+Once all fixes are applied and the notebook runs successfully in Google Colab, it will automatically generate:
+
+- Inference time on the **original Cora graph** \(G\)
+- Inference time on the **compressed Cora graph** \(G^{*}\)
+- A **speed-up plot** comparing GCN, GAT, and GraphSAGE inference times before and after SPGC compression
+
+These results are saved automatically in the `results/` directory.  
+The produced plot can be used directly for benchmarking or for comparison with Figure 7 from the original paper.
+
+---
+
+## 📝 Citation
+
+If you use or reference this reproduction, please cite the original SPGC research paper:
+Fan, Y., Che, H., Lu, M., & Wu, Y. (2025). Inference-Friendly Graph Compression for Graph Neural Networks. PVLDB 2025.
+
+You can also access the paper online at:
+https://www.vldb.org/pvldb/vol18/p3203-fan.pdf
+
+---
+
+## 🤝 Acknowledgment
+
+This reproduction is based on the official SPGC code release by the authors:
+
+🔗 https://github.com/Yangxin666/SPGC
+
+We would like to thank the SPGC authors for making their implementation publicly available.  
+All modifications documented in this repository were made solely to enable execution in Google Colab and do not alter the original algorithmic logic of SPGC.
